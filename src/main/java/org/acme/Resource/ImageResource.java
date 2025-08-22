@@ -51,26 +51,32 @@ public class ImageResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional
     public Response createImage(ImageInput input) {
-        // ID tidak lagi diinput oleh user, jadi validasi hanya untuk file
         if (input.image == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new DeleteImageResponse("Gambar wajib diisi.")).build();
         }
 
+        // --- VALIDASI FORMAT FILE ---
+        FileUpload fileUpload = input.image;
+        String contentType = fileUpload.contentType();
+        if (!"image/png".equals(contentType) && !"image/jpeg".equals(contentType)) {
+            return Response.status(Response.Status.UNSUPPORTED_MEDIA_TYPE)
+                    .entity(new DeleteImageResponse("Format file tidak didukung. Hanya PNG dan JPG yang diizinkan."))
+                    .build();
+        }
+        // --- AKHIR VALIDASI ---
+
         try {
-            FileUpload fileUpload = input.image;
             String newFileName = fileStorageService.store(fileUpload);
             String filePath = Paths.get(newFileName).toString();
 
             Database image = new Database();
-            // image.id tidak di-set, akan dibuat otomatis oleh database
             image.fileName = newFileName;
             image.originalFileName = fileUpload.fileName();
             image.filePath = filePath;
             image.fileType = fileUpload.contentType();
             image.persist();
 
-            // Response sekarang menggunakan image.id yang bertipe UUID
             return Response.status(Response.Status.CREATED).entity(new ImageResponse(image.id, image.filePath))
                     .build();
         } catch (Exception e) {
@@ -82,17 +88,27 @@ public class ImageResource {
 
     // --- UPDATE ---
     @PUT
-    @Path("/{id}") // ID sekarang menjadi bagian dari path URL
+    @Path("/{id}")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional
-    public Response updateImage(@PathParam("id") UUID id, ImageInput input) { // ID diambil dari path
+    public Response updateImage(@PathParam("id") UUID id, ImageInput input) {
         if (input.image == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new DeleteImageResponse("Gambar wajib diisi.")).build();
         }
 
-        Optional<Database> imageOpt = Database.findByIdOptional(id); // Cari berdasarkan UUID
+        // --- VALIDASI FORMAT FILE ---
+        FileUpload fileUpload = input.image;
+        String contentType = fileUpload.contentType();
+        if (!"image/png".equals(contentType) && !"image/jpeg".equals(contentType)) {
+            return Response.status(Response.Status.UNSUPPORTED_MEDIA_TYPE)
+                    .entity(new DeleteImageResponse("Format file tidak didukung. Hanya PNG dan JPG yang diizinkan."))
+                    .build();
+        }
+        // --- AKHIR VALIDASI ---
+
+        Optional<Database> imageOpt = Database.findByIdOptional(id);
         if (imageOpt.isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new DeleteImageResponse("Gambar dengan ID " + id + " tidak ditemukan.")).build();
@@ -102,7 +118,6 @@ public class ImageResource {
             Database image = imageOpt.get();
             fileStorageService.delete(image.fileName);
 
-            FileUpload fileUpload = input.image;
             String newFileName = fileStorageService.store(fileUpload);
             String filePath = Paths.get(newFileName).toString();
 
@@ -122,10 +137,10 @@ public class ImageResource {
 
     // --- DELETE ---
     @DELETE
-    @Path("/{id}") // ID ada di path URL
+    @Path("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional
-    public Response deleteImage(@PathParam("id") UUID id) { // Tipe ID diubah menjadi UUID
+    public Response deleteImage(@PathParam("id") UUID id) {
         return Database.<Database>findByIdOptional(id)
                 .map(image -> {
                     fileStorageService.delete(image.fileName);
