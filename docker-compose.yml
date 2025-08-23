@@ -1,0 +1,49 @@
+services:
+  # Layanan untuk aplikasi backend Quarkus Anda
+  backend:
+    build:
+      context: .
+      dockerfile: src/main/Docker/Dockerfile.jvm
+    ports:
+      - "8080:8080"
+    networks:
+      - vehicle
+    # Menambahkan environment variables untuk koneksi database
+    # Quarkus akan otomatis menggunakan variabel ini
+    environment:
+      QUARKUS_DATASOURCE_DB_KIND: mysql
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:mysql://db:3306/api_bengkel
+      QUARKUS_DATASOURCE_USERNAME: bengkel
+      QUARKUS_DATASOURCE_PASSWORD: bengkel
+      UPLOAD_DIRECTORY: /deployments/uploads
+    # Memastikan backend baru akan berjalan SETELAH database siap
+    volumes:
+      - ./image/file:/deployments/uploads
+    depends_on:
+      - db
+
+  # Layanan baru untuk database MySQL
+  db:
+    image: mysql:8.0
+    restart: always
+    networks:
+      - vehicle
+    # Environment variables untuk mengkonfigurasi container MySQL
+    environment:
+      MYSQL_DATABASE: api_bengkel
+      MYSQL_USER: bengkel
+      MYSQL_PASSWORD: bengkel
+      MYSQL_ROOT_PASSWORD: bengkel
+
+    # (Opsional) Menyimpan data MySQL di volume agar tidak hilang saat container di-restart
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+# Mendefinisikan network yang akan digunakan
+networks:
+  vehicle:
+    name: quarkus-vehicle-network
+
+# Mendefinisikan volume untuk persistensi data
+volumes:
+  mysql_data:
