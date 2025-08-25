@@ -1,9 +1,7 @@
 services:
   # Layanan untuk aplikasi backend Quarkus Anda
   backend:
-    build:
-      context: .
-      dockerfile: src/main/Docker/Dockerfile.jvm
+    image: tuderama/api-bengkel:latest
     ports:
       - "8080:8080"
     networks:
