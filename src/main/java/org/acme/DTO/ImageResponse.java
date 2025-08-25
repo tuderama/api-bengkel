@@ -4,10 +4,10 @@ import java.util.UUID;
 
 public class ImageResponse {
     public UUID id;
-    public String imageName;
+    public String url;
 
-    public ImageResponse(UUID id, String imageName) {
+    public ImageResponse(UUID id, String url) {
         this.id = id;
-        this.imageName = imageName;
+        this.url = url;
     }
 }
