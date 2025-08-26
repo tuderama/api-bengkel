@@ -25,7 +25,7 @@ import java.util.List; // <-- IMPORT BARU
 import java.util.Optional;
 import java.util.UUID;
 
-@Path("/images")
+@Path("api/v1/images")
 @ApplicationScoped
 public class ImageResource {
     @Context
