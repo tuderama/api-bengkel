@@ -9,7 +9,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
-import org.acme.DTO.BulkImageInput; // <-- IMPORT BARU
+import org.acme.DTO.BulkImageInput;
 import org.acme.DTO.DeleteImageResponse;
 import org.acme.DTO.ImageInput;
 import org.acme.DTO.ImageResponse;
@@ -20,8 +20,9 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList; // <-- IMPORT BARU
-import java.util.List; // <-- IMPORT BARU
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -62,69 +63,39 @@ public class ImageResource {
                 .build();
     }
 
-    // --- CREATE ---
     @POST
-    @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Produces(MediaType.APPLICATION_JSON)
-    @Transactional
-    public Response createImage(ImageInput input) {
-        // ... (kode yang sudah ada tidak berubah)
-        if (input.image == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new DeleteImageResponse("Gambar wajib diisi.")).build();
-        }
-
-        // --- VALIDASI FORMAT FILE ---
-        FileUpload fileUpload = input.image;
-        String contentType = fileUpload.contentType();
-        if (!"image/png".equals(contentType) && !"image/jpeg".equals(contentType)) {
-            return Response.status(Response.Status.UNSUPPORTED_MEDIA_TYPE)
-                    .entity(new DeleteImageResponse("Format file tidak didukung. Hanya PNG dan JPG yang diizinkan."))
-                    .build();
-        }
-        // --- AKHIR VALIDASI ---
-
-        try {
-            String newFileName = fileStorageService.store(input.image);
-
-            Database image = new Database();
-            image.fileName = newFileName;
-            image.originalFileName = input.image.fileName();
-            image.filePath = Paths.get(newFileName).toString(); // filePath tetap disimpan
-            image.fileType = input.image.contentType();
-            image.persist();
-
-            // ✅ Gunakan helper method untuk membuat URL lengkap
-            String imageUrl = buildImageUrl(image.fileName);
-
-            return Response.status(Response.Status.CREATED).entity(new ImageResponse(image.id, imageUrl))
-                    .build();
-        } catch (Exception e) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(new DeleteImageResponse(e.getMessage()))
-                    .build();
-        }
-    }
-
-    // --- BULK CREATE (METHOD BARU) ---
-    @POST
-    @Path("/bulk") // Path baru untuk membedakan dengan create tunggal
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional
     public Response createBulkImages(BulkImageInput input) {
         if (input.image == null || input.image.isEmpty()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new DeleteImageResponse("Tidak ada gambar yang diunggah.")).build();
+                    .entity(new DeleteImageResponse("Tidak ada gambar yang diunggah, Gambar wajib diisi.")).build();
         }
 
-        List<ImageResponse> successfulUploads = new ArrayList<>();
+        List<String> allowedMimeTypes = Arrays.asList("image/jpeg", "image/png");
 
+        // ▼▼▼ TAHAP 1: VALIDASI SEMUA FILE SEBELUM MEMPROSES APAPUN ▼▼▼
+        for (FileUpload fileUpload : input.image) {
+            String contentType = fileUpload.contentType();
+            if (!allowedMimeTypes.contains(contentType)) {
+                // Jika ditemukan satu file tidak valid, langsung hentikan semua proses.
+                // Pada titik ini, belum ada file yang disimpan ke disk.
+                String errorMessage = "Format file tidak valid untuk '" + fileUpload.fileName() +
+                        "'. Semua unggahan dibatalkan karena ada file yang tidak sesuai.";
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(new DeleteImageResponse(errorMessage))
+                        .build();
+            }
+        }
+        List<ImageResponse> successfulUploads = new ArrayList<>();
+        List<String> savedFileNames = new ArrayList<>(); // Tetap dibutuhkan untuk rollback jika ada error saat
+                                                         // penyimpanan
         try {
             for (FileUpload fileUpload : input.image) {
-                // ... (kode validasi format file)
-
+                // Kita tidak perlu validasi lagi di sini karena sudah dilakukan di Tahap 1.
                 String newFileName = fileStorageService.store(fileUpload);
+                savedFileNames.add(newFileName); // Lacak file yang disimpan untuk jaga-jaga
 
                 Database image = new Database();
                 image.fileName = newFileName;
@@ -133,10 +104,10 @@ public class ImageResource {
                 image.fileType = fileUpload.contentType();
                 image.persist();
 
-                // ✅ Gunakan helper method untuk membuat URL lengkap
                 String imageUrl = buildImageUrl(image.fileName);
                 successfulUploads.add(new ImageResponse(image.id, imageUrl));
             }
+
             return Response.status(Response.Status.CREATED).entity(successfulUploads).build();
         } catch (Exception e) {
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -155,7 +126,7 @@ public class ImageResource {
         // ... (kode yang sudah ada tidak berubah)
         if (input.image == null) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new DeleteImageResponse("Gambar wajib diisi.")).build();
+                    .entity(new DeleteImageResponse("Tidak ada gambar yang diunggah, Gambar wajib diisi.")).build();
         }
 
         // --- VALIDASI FORMAT FILE ---
